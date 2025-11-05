@@ -15,7 +15,7 @@ val agent = AIAgent(
     toolRegistry = ToolRegistry {
         tool(SayToUser)
     },
-    maxIterations = 100
+    maxIterations = 10
 )
 
 fun main() = runBlocking {
