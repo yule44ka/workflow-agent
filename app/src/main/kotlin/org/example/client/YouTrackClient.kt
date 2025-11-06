@@ -1,5 +1,7 @@
 package org.example.client
 
+import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.agents.core.tools.annotations.Tool
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -25,6 +27,8 @@ class YouTrackClient(
 
     private fun baseUrl(path: String): String = "https://$domain$path"
 
+    @Tool
+    @LLMDescription("Validate if YouTrack project exists by id.")
     suspend fun validateProject(projectId: String): Project? {
         val url = baseUrl("/api/admin/projects/$projectId") + "?fields=id,name"
         val response = client.get(url) {
@@ -33,6 +37,8 @@ class YouTrackClient(
         return if (response.status.isSuccess()) response.body() else null
     }
 
+    @Tool
+    @LLMDescription("Get all workflows for YouTrack project.")
     suspend fun getProjectWorkflows(projectId: String): List<Workflow> {
         val url = baseUrl("/api/admin/projects/$projectId/workflows") + "?fields=workflow(id,name)"
         val response = client.get(url) {
@@ -43,6 +49,8 @@ class YouTrackClient(
         return usages.mapNotNull { it.workflow }
     }
 
+    @Tool
+    @LLMDescription("Get all enabled rules for project by workflow.")
     suspend fun getEnabledRulesForWorkflow(projectId: String, workflow: Workflow): List<WorkflowRule> {
         val url = baseUrl("/api/admin/apps/${workflow.id}") +
                 "?fields=pluggableObjects(id,name,description,script(id,script),usages(enabled,configuration(project(shortName))))"
