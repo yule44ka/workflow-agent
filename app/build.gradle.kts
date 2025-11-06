@@ -8,6 +8,7 @@
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 
     // Apply the application plugin to add support for building a CLI application in Java.
     application
@@ -32,6 +33,9 @@ dependencies {
 
     implementation("ai.koog:koog-agents:0.5.2")
     implementation("io.ktor:ktor-client-cio:3.0.0")
+    implementation("io.ktor:ktor-client-content-negotiation:3.0.0")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
