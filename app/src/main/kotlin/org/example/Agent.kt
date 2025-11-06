@@ -4,7 +4,6 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.dsl.builder.strategy
 import ai.koog.prompt.executor.llms.Executors.promptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
-import org.example.client.YouTrackClient
 import org.example.model.Workflow
 import org.example.model.WorkflowRule
 import org.example.model.Project
@@ -15,8 +14,6 @@ import org.example.model.Script
 import org.example.model.Configuration
 import org.example.model.ProjectShort
 import org.example.model.Usage
-import org.example.utils.SerializationUtils
-import org.example.utils.ContextLoader
 
 import ai.koog.agents.core.agent.singleRunStrategy
 import ai.koog.agents.core.tools.ToolRegistry
@@ -43,20 +40,34 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import java.lang.System.getenv
 
-private val client = HttpClient(CIO)
-val domain: String? = getenv("DOMAIN")
-val token: String? = getenv("YOUTRACK_TOKEN")
+private val client = HttpClient(CIO) {
+    install(ContentNegotiation) {
+        json()
+    }
+}
+val domain: String = getenv("DOMAIN") ?: throw IllegalStateException("DOMAIN environment variable is not set")
+val token: String = getenv("YOUTRACK_TOKEN") ?: throw IllegalStateException("YOUTRACK_TOKEN environment variable is not set")
+
+@Tool
+@LLMDescription("Get documentation about YouTrack workflows.")
+fun readWorkflowContext(): String {
+    val resourceName = "workflow_context.md"
+    val cl = Thread.currentThread().contextClassLoader
+
+    return cl.getResourceAsStream(resourceName)
+        ?.reader(Charsets.UTF_8)
+        ?.readText()
+        ?: ""
+}
 
 @Tool
 @LLMDescription("Validate if YouTrack project exists by id.")
-fun validateProject(projectId: String): Project? {
-    return runBlocking {
-        val url = "$domain/api/admin/projects/$projectId?fields=id,name"
-        val response = client.get(url) {
-            header("Authorization", "Bearer $token")
-        }
-        if (response.status.isSuccess()) response.body() else null
+suspend fun validateProject(projectId: String): Project? {
+    val url = "$domain/api/admin/projects/$projectId?fields=id,name"
+    val response = client.get(url) {
+        header("Authorization", "Bearer $token")
     }
+    return if (response.status.isSuccess()) response.body() else null
 }
 
 @Tool
@@ -101,20 +112,23 @@ suspend fun getEnabledRulesForWorkflow(projectId: String, workflow: Workflow): L
 
 
 val agent = AIAgent(
-    promptExecutor = simpleAnthropicExecutor(getenv("ANTHROPIC_API_KEY")),
+    promptExecutor = simpleAnthropicExecutor(
+        getenv("ANTHROPIC_API_KEY") ?: throw IllegalStateException("ANTHROPIC_API_KEY environment variable is not set")
+    ),
 //    strategy = singleRunStrategy(),
     systemPrompt = """
         You are a youtrack workflow specialist. 
         You need to help user with his problem.
-        You need to find a workflow rule that made some action in YouTrack by user’s description.
+        You need to find a workflow rule that made some action in YouTrack by user's description.
         Expected output: explanation why it happened + links to workflow rules that potentially could lead to this behaviour.
         Usual link for workflow looks like this: $domain/<projectId>?tab=workflow&selected=<workflowId>
     """.trimIndent(),
     llmModel = AnthropicModels.Sonnet_4,
     toolRegistry = ToolRegistry {
-        validateProject(),
-        getProjectWorkflows(),
-        getEnabledRulesForWorkflow()
+        ::readWorkflowContext
+        ::validateProject
+        ::getProjectWorkflows
+        ::getEnabledRulesForWorkflow
     },
     maxIterations = 100
 ) {
@@ -125,14 +139,17 @@ val agent = AIAgent(
     }
 }
 
-fun main(args: Array<String>) = runBlocking {
-    if (args.isEmpty()) {
-        println("Error: Please provide the problem")
+fun main() = runBlocking {
+    println("Please describe your YouTrack problem:")
+    val input = readLine()
+    
+    if (input.isNullOrBlank()) {
+        println("Error: No input provided")
         return@runBlocking
     }
 
-    val input: String = args[0]
     val result = agent.run(input)
+    println("\n--- Result ---")
     println(result)
 }
 
