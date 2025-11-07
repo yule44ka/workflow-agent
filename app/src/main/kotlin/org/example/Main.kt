@@ -1,23 +1,21 @@
 package org.example
+import org.example.agent
 
-import ai.koog.agents.core.agent.AIAgent
-import ai.koog.agents.core.tools.ToolRegistry
-import ai.koog.agents.ext.tool.SayToUser
-import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
-import ai.koog.prompt.executor.llms.all.simpleAnthropicExecutor
-import kotlinx.coroutines.runBlocking
+suspend fun main() {
+    // Use agent
+    while (true) {
+        print("\nEnter your problem (or type 'exit'): ")
+        val userInput = readln().trim()
+        if (userInput.equals("exit", true)) break
 
-val agent = AIAgent(
-    promptExecutor = simpleAnthropicExecutor(System.getenv("ANTHROPIC_KEY")),
-    systemPrompt = "You are a helpful assistant. Answer user questions concisely.",
-    llmModel = AnthropicModels.Sonnet_4,
-    temperature = 0.7,
-    toolRegistry = ToolRegistry {
-        tool(SayToUser)
-    },
-    maxIterations = 100
-)
+        if (userInput.isBlank()) {
+            println("Input cannot be empty. Please describe your problem.")
+            continue
+        }
 
-fun main() = runBlocking {
-    val result = agent.run("Hello! How can you help me?")
+        println("\nProcessing...\n")
+        val result = agent.run(userInput)
+
+        println("Response:\n$result")
+    }
 }
