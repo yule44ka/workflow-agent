@@ -56,7 +56,7 @@ val prompt = """
 
 val youtrackTools = YouTrackToolSet()
 
-val agent = AIAgent(
+fun createAgent() = AIAgent(
     promptExecutor = simpleAnthropicExecutor(
         getenv("ANTHROPIC_API_KEY") ?: throw IllegalStateException("ANTHROPIC_API_KEY environment variable is not set")
     ),

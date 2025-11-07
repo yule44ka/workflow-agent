@@ -1,5 +1,5 @@
 package org.example
-import org.example.agent
+import org.example.createAgent
 
 suspend fun main() {
     // Use agent
@@ -13,6 +13,7 @@ suspend fun main() {
         }
 
         println("\nProcessing...\n")
+        val agent = createAgent()
         var result = agent.run(userInput)
         // Cut off the analysis section
         result = result.replace(Regex("<investigation_analysis>[\\s\\S]*?</investigation_analysis>", RegexOption.IGNORE_CASE), "").trimStart()
