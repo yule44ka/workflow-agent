@@ -37,16 +37,23 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import java.lang.System.getenv
 
 private val client = HttpClient(CIO) {
     install(ContentNegotiation) {
-        json()
+        json(
+            Json {
+                ignoreUnknownKeys = true
+            }
+        )
     }
 }
+
 val domain: String = getenv("DOMAIN") ?: throw IllegalStateException("DOMAIN environment variable is not set")
 val token: String = getenv("YOUTRACK_TOKEN") ?: throw IllegalStateException("YOUTRACK_TOKEN environment variable is not set")
 
@@ -90,25 +97,48 @@ class MyToolSet : ToolSet {
 
     @Tool
     @LLMDescription("Get all workflows for YouTrack project.")
-    suspend fun getProjectWorkflows(projectId: String): List<Workflow> {
-        println("📥 Getting workflows for project: $projectId")
+    fun getProjectWorkflows(projectId: String): List<Workflow> = runBlocking {
+        println("🔍 Fetching workflows for project: $projectId")
+
         val url = "$domain/api/admin/projects/$projectId/workflows?fields=workflow(id,name)"
+
         val response = client.get(url) {
             header("Authorization", "Bearer $token")
         }
+
+        // Print status + basic info
+        println("📡 GET $url → ${response.status}")
+
         if (!response.status.isSuccess()) {
-            println("📤 No workflows found or error occurred")
-            return emptyList()
+            println("❌ Failed to load workflows for project $projectId")
+            return@runBlocking emptyList()
         }
-        val usages: List<WorkflowUsageResponse> = response.body()
+
+        // Read raw JSON (for debug)
+        val rawJson = response.bodyAsText()
+        println("📥 Raw JSON:\n$rawJson")
+
+        // Deserialize
+        val usages: List<WorkflowUsageResponse> = try {
+            response.body()
+        } catch (e: Exception) {
+            println("⚠️ Failed to deserialize response: ${e.message}")
+            return@runBlocking emptyList()
+        }
+
         val workflows = usages.mapNotNull { it.workflow }
-        println("📤 Found ${workflows.size} workflow(s): ${workflows.joinToString { it.name }}")
-        return workflows
+
+        println("✅ Found ${workflows.size} workflow(s): ${workflows.joinToString { it.name }}")
+
+        workflows
     }
 
     @Tool
     @LLMDescription("Get all enabled rules for project by workflow.")
-    suspend fun getEnabledRulesForWorkflow(projectId: String, workflow: Workflow): List<WorkflowRule> {
+    suspend fun getEnabledRulesForWorkflow(
+        @LLMDescription("Project ID is its name in YouTrack it should be letters for example NEW.")
+        projectId: String,
+        workflow: Workflow): List<WorkflowRule> {
         println("📥 Getting enabled rules for workflow '${workflow.name}' (${workflow.id}) in project: $projectId")
         val url = "$domain/api/admin/apps/${workflow.id}?fields=pluggableObjects(id,name,description,script(id,script),usages(enabled,configuration(project(shortName))))"
         val response = client.get(url) {
