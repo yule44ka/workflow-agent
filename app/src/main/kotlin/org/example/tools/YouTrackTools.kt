@@ -35,8 +35,20 @@ private val client = HttpClient(CIO) {
 val domain: String = getenv("DOMAIN") ?: throw IllegalStateException("DOMAIN environment variable is not set")
 val token: String = getenv("YOUTRACK_TOKEN") ?: throw IllegalStateException("YOUTRACK_TOKEN environment variable is not set")
 
-@LLMDescription("Tools for getting info from YouTrack.")
+@LLMDescription("Tools for getting info from and about YouTrack.")
 class YouTrackToolSet : ToolSet {
+    @Tool
+    @LLMDescription("Get documentation about YouTrack Workflows.")
+    fun readWorkflowDocumentation(): String {
+        val resourceName = "workflow_context.md"
+        val cl = Thread.currentThread().contextClassLoader
+
+        return cl.getResourceAsStream(resourceName)
+            ?.reader(Charsets.UTF_8)
+            ?.readText()
+            ?: ""
+    }
+
     @Tool
     @LLMDescription("Validate if YouTrack project exists by its name.")
     fun validateProject(

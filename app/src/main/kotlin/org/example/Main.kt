@@ -1,23 +1,24 @@
 package org.example
-import org.example.createAgent
+import org.example.agent
 
 suspend fun main() {
-    // Use agent
-    while (true) {
-        print("\nEnter your problem (or type 'exit' to stop): ")
-        val userInput = readln().trim()
-        if (userInput.equals("exit", true)) break
-        if (userInput.isBlank()) {
-            println("Input cannot be empty. Please describe your problem.")
-            continue
-        }
+    println("YouTrack Workflow Assistant")
+    println("Type 'exit' to quit at any time.\n")
+    
+    print("Enter your problem: ")
+    val userInput = readln().trim()
+    if (userInput.equals("exit", true)) return
+    if (userInput.isBlank()) {
+        println("Input cannot be empty. Please describe your problem.")
+        return
+    }
 
-        println("\nProcessing...\n")
-        val agent = createAgent()
-        var result = agent.run(userInput)
-        // Cut off the analysis section
-        result = result.replace(Regex("<investigation_analysis>[\\s\\S]*?</investigation_analysis>", RegexOption.IGNORE_CASE), "").trimStart()
-
-        println("Response:\n$result")
+    // Run the agent - it will handle the conversation flow internally
+    // using AskUser, SayToUser, and ExitTool
+    try {
+        agent.run(userInput)
+    } catch (e: Exception) {
+        println("An error occurred: ${e.message}")
+        e.printStackTrace()
     }
 }
