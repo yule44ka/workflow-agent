@@ -6,8 +6,11 @@ import ai.koog.agents.core.tools.reflect.tools
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.llms.all.simpleAnthropicExecutor
 import org.example.tools.YouTrackToolSet
-import org.example.tools.readWorkflowDocumentation
 import java.lang.System.getenv
+import ai.koog.agents.ext.agent.chatAgentStrategy
+import ai.koog.agents.ext.tool.AskUser
+import ai.koog.agents.ext.tool.ExitTool
+import ai.koog.agents.ext.tool.SayToUser
 
 val prompt = """
     You are a YouTrack workflow specialist assistant. Your role is to help users understand why certain behaviors occurred in their YouTrack projects by identifying the workflow rules that caused those behaviors.
@@ -40,6 +43,10 @@ val prompt = """
     - Do not include code or technical implementation details
     - Do not provide extra information beyond what's needed to explain the behavior
     - Workflow links should follow this format: ${org.example.tools.domain}/projects/<projectId>?tab=workflow&selected=<workflowId>
+    - IMPORTANT: After solving each problem, you MUST say to the user response and ask the user if they have any other problems using the AskUser tool
+    - IMPORTANT: Keep the conversation going indefinitely until the user explicitly says "exit"
+    - IMPORTANT: Only call the ExitTool when the user explicitly says "exit" or equivalent (like "quit", "bye", "stop")
+    - If the user wants to report another problem, start the investigation process again from step 1
 
     **Example response structure:**
     ```
@@ -56,16 +63,19 @@ val prompt = """
 
 val youtrackTools = YouTrackToolSet()
 
-fun createAgent() = AIAgent(
+val agent = AIAgent(
     promptExecutor = simpleAnthropicExecutor(
         getenv("ANTHROPIC_API_KEY") ?: throw IllegalStateException("ANTHROPIC_API_KEY environment variable is not set")
     ),
     llmModel = AnthropicModels.Sonnet_4,
     toolRegistry = ToolRegistry {
-        readWorkflowDocumentation()
+        tool(SayToUser)
+        tool(AskUser)
+        tool(ExitTool)
         tools(youtrackTools)
     },
     systemPrompt = prompt,
+    strategy = chatAgentStrategy(),
     maxIterations = 100
 )
 // For DEBUG
