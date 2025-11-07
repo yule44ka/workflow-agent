@@ -38,6 +38,18 @@ val token: String = getenv("YOUTRACK_TOKEN") ?: throw IllegalStateException("YOU
 @LLMDescription("Tools for getting info from YouTrack.")
 class YouTrackToolSet : ToolSet {
     @Tool
+    @LLMDescription("Get documentation about YouTrack Workflows.")
+    fun readWorkflowDocumentation(): String {
+        val resourceName = "workflow_context.md"
+        val cl = Thread.currentThread().contextClassLoader
+
+        return cl.getResourceAsStream(resourceName)
+            ?.reader(Charsets.UTF_8)
+            ?.readText()
+            ?: ""
+    }
+
+    @Tool
     @LLMDescription("Validate if YouTrack project exists by its name.")
     fun validateProject(
         @LLMDescription("Name of project you want to validate.")
