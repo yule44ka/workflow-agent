@@ -19,6 +19,8 @@ import ai.koog.agents.core.agent.singleRunStrategy
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.annotations.Tool
+import ai.koog.agents.core.tools.reflect.ToolSet
+import ai.koog.agents.core.tools.reflect.tools
 import ai.koog.agents.ext.tool.file.EditFileTool
 import ai.koog.agents.ext.tool.file.ListDirectoryTool
 import ai.koog.agents.ext.tool.file.ReadFileTool
@@ -51,65 +53,96 @@ val token: String = getenv("YOUTRACK_TOKEN") ?: throw IllegalStateException("YOU
 @Tool
 @LLMDescription("Get documentation about YouTrack workflows.")
 fun readWorkflowContext(): String {
+    println("📥 Reading workflow context documentation...")
     val resourceName = "workflow_context.md"
     val cl = Thread.currentThread().contextClassLoader
 
-    return cl.getResourceAsStream(resourceName)
+    val result = cl.getResourceAsStream(resourceName)
         ?.reader(Charsets.UTF_8)
         ?.readText()
         ?: ""
+    
+    println("📤 Loaded ${result.length} characters of documentation")
+    return result
 }
 
-@Tool
-@LLMDescription("Validate if YouTrack project exists by id.")
-suspend fun validateProject(projectId: String): Project? {
-    val url = "$domain/api/admin/projects/$projectId?fields=id,name"
-    val response = client.get(url) {
-        header("Authorization", "Bearer $token")
-    }
-    return if (response.status.isSuccess()) response.body() else null
-}
-
-@Tool
-@LLMDescription("Get all workflows for YouTrack project.")
-suspend fun getProjectWorkflows(projectId: String): List<Workflow> {
-    val url = "$domain/api/admin/projects/$projectId/workflows?fields=workflow(id,name)"
-    val response = client.get(url) {
-        header("Authorization", "Bearer $token")
-    }
-    if (!response.status.isSuccess()) return emptyList()
-    val usages: List<WorkflowUsageResponse> = response.body()
-    return usages.mapNotNull { it.workflow }
-}
-
-@Tool
-@LLMDescription("Get all enabled rules for project by workflow.")
-suspend fun getEnabledRulesForWorkflow(projectId: String, workflow: Workflow): List<WorkflowRule> {
-    val url = "$domain/api/admin/apps/${workflow.id}?fields=pluggableObjects(id,name,description,script(id,script),usages(enabled,configuration(project(shortName))))"
-    val response = client.get(url) {
-        header("Authorization", "Bearer $token")
-    }
-    if (!response.status.isSuccess()) return emptyList()
-    val app: AppDetails = response.body()
-    val rules = mutableListOf<WorkflowRule>()
-    for (po in app.pluggableObjects) {
-        val enabledForProject = po.usages.any { usage ->
-            usage.enabled && usage.configuration?.project?.shortName?.equals(projectId, ignoreCase = true) == true
-        }
-        if (enabledForProject) {
-            rules += WorkflowRule(
-                ruleId = po.id,
-                ruleName = po.name,
-                ruleDescription = po.description,
-                ruleScript = po.script?.script,
-                workflowId = workflow.id,
-                workflowName = workflow.name,
-            )
+@LLMDescription("Tools for getting info from YouTrack.")
+class MyToolSet : ToolSet {
+    @Tool
+    @LLMDescription("Validate if YouTrack project exists by id.")
+    fun validateProject(
+        @LLMDescription("Id of project to validate.")
+        projectId: String
+    ): String {
+        println("📥 Validating project: $projectId")
+        return runBlocking {
+            val url = "$domain/api/admin/projects/$projectId?fields=id,name"
+            val response = client.get(url) {
+                header("Authorization", "Bearer $token")
+            }
+            if (response.status.isSuccess()) {
+                response.body()
+            } else {
+                "Project with id '$projectId' does not exist."
+            }
         }
     }
-    return rules
+
+    @Tool
+    @LLMDescription("Get all workflows for YouTrack project.")
+    suspend fun getProjectWorkflows(projectId: String): List<Workflow> {
+        println("📥 Getting workflows for project: $projectId")
+        val url = "$domain/api/admin/projects/$projectId/workflows?fields=workflow(id,name)"
+        val response = client.get(url) {
+            header("Authorization", "Bearer $token")
+        }
+        if (!response.status.isSuccess()) {
+            println("📤 No workflows found or error occurred")
+            return emptyList()
+        }
+        val usages: List<WorkflowUsageResponse> = response.body()
+        val workflows = usages.mapNotNull { it.workflow }
+        println("📤 Found ${workflows.size} workflow(s): ${workflows.joinToString { it.name }}")
+        return workflows
+    }
+
+    @Tool
+    @LLMDescription("Get all enabled rules for project by workflow.")
+    suspend fun getEnabledRulesForWorkflow(projectId: String, workflow: Workflow): List<WorkflowRule> {
+        println("📥 Getting enabled rules for workflow '${workflow.name}' (${workflow.id}) in project: $projectId")
+        val url = "$domain/api/admin/apps/${workflow.id}?fields=pluggableObjects(id,name,description,script(id,script),usages(enabled,configuration(project(shortName))))"
+        val response = client.get(url) {
+            header("Authorization", "Bearer $token")
+        }
+        if (!response.status.isSuccess()) {
+            println("📤 Failed to retrieve workflow rules")
+            return emptyList()
+        }
+        val app: AppDetails = response.body()
+        val rules = mutableListOf<WorkflowRule>()
+        for (po in app.pluggableObjects) {
+            val enabledForProject = po.usages.any { usage ->
+                usage.enabled && usage.configuration?.project?.shortName?.equals(projectId, ignoreCase = true) == true
+            }
+            if (enabledForProject) {
+                rules += WorkflowRule(
+                    ruleId = po.id,
+                    ruleName = po.name,
+                    ruleDescription = po.description,
+                    ruleScript = po.script?.script,
+                    workflowId = workflow.id,
+                    workflowName = workflow.name,
+                )
+            }
+        }
+        println("📤 Found ${rules.size} enabled rule(s): ${rules.joinToString { it.ruleName }}")
+        return rules
+    }
+
 }
 
+
+val youtrackTools = MyToolSet()
 
 val agent = AIAgent(
     promptExecutor = simpleAnthropicExecutor(
@@ -121,32 +154,37 @@ val agent = AIAgent(
         You need to help user with his problem.
         You need to find a workflow rule that made some action in YouTrack by user's description.
         Expected output: explanation why it happened + links to workflow rules that potentially could lead to this behaviour.
-        Usual link for workflow looks like this: $domain/<projectId>?tab=workflow&selected=<workflowId>
+        Usual link for workflow looks like this: $domain/projects/<projectId>?tab=workflow&selected=<workflowId>
     """.trimIndent(),
     llmModel = AnthropicModels.Sonnet_4,
     toolRegistry = ToolRegistry {
-        ::readWorkflowContext
-        ::validateProject
-        ::getProjectWorkflows
-        ::getEnabledRulesForWorkflow
+        readWorkflowContext()
+        tools(youtrackTools)
     },
     maxIterations = 100
 ) {
     handleEvents {
         onToolCallStarting { ctx ->
-            println("Tool called: ${ctx.tool.name}")
+            println("\n═══════════════════════════════════════════")
+            println("🔧 Tool Called: ${ctx.tool.name}")
+            println("═══════════════════════════════════════════")
+        }
+
+        onToolCallCompleted { ctx ->
+            println("✅ Tool Completed: ${ctx.tool.name}")
+            println("═══════════════════════════════════════════\n")
+        }
+
+        onToolCallFailed { ctx ->
+            println("❌ Tool Failed: ${ctx.tool.name}")
+            println("═══════════════════════════════════════════\n")
         }
     }
 }
 
 fun main() = runBlocking {
     println("Please describe your YouTrack problem:")
-    val input = readLine()
-    
-    if (input.isNullOrBlank()) {
-        println("Error: No input provided")
-        return@runBlocking
-    }
+    val input = "When I create simple issue without parameters in DEMO project it failes with error"
 
     val result = agent.run(input)
     println("\n--- Result ---")
