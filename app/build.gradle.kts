@@ -51,6 +51,11 @@ application {
     mainClass = "org.example.MainKt"
 }
 
+tasks.named<JavaExec>("run") {
+    // Enable standard input for interactive console applications
+    standardInput = System.`in`
+}
+
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()

@@ -27,7 +27,6 @@ val agent = AIAgent(
     """.trimIndent(),
     llmModel = AnthropicModels.Sonnet_4,
     toolRegistry = ToolRegistry {
-        readWorkflowContext()
         tools(youtrackTools)
     },
     maxIterations = 100
@@ -39,10 +38,4 @@ val agent = AIAgent(
             }..."
         }
     }
-}
-
-fun main() = runBlocking {
-    val input = "When I create simple issue without parameters in DEMO project it fails with error"
-    val result = agent.run(input)
-    println(result)
 }
