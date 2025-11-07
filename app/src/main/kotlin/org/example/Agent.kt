@@ -43,7 +43,7 @@ val prompt = """
     - Do not include code or technical implementation details
     - Do not provide extra information beyond what's needed to explain the behavior
     - Workflow links should follow this format: ${org.example.tools.domain}/projects/<projectId>?tab=workflow&selected=<workflowId>
-    - IMPORTANT: After solving each problem, you MUST ask the user if they have any other problems using the AskUser tool
+    - IMPORTANT: After solving each problem, you MUST say to the user response and ask the user if they have any other problems using the AskUser tool
     - IMPORTANT: Keep the conversation going indefinitely until the user explicitly says "exit"
     - IMPORTANT: Only call the ExitTool when the user explicitly says "exit" or equivalent (like "quit", "bye", "stop")
     - If the user wants to report another problem, start the investigation process again from step 1

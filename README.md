@@ -1,13 +1,16 @@
 # YouTrack Workflow Agent
 
-An AI-powered agent that helps diagnose and explain YouTrack workflow behavior. The agent analyzes workflow rules and identifies which rules may have caused specific actions in your YouTrack instance.
+AI agent that helps diagnose and explain YouTrack workflow behavior. The agent analyzes workflow rules and identifies which rules may have caused specific actions in your YouTrack instance.
 
 ## Features
 
-- Interactive CLI for querying workflow behavior
-- AI-powered analysis using Claude Sonnet 4
-- Automatic workflow rule inspection
-- Links to relevant workflow configurations
+- Interactive CLI 
+- History of dialog
+- Connection to your YouTrack instance
+- Automatic workflow rules retrieving
+- Documentation usage as context for a better understanding of workflows
+- AI analysis using Claude Sonnet 4
+- Links to relevant workflows
 
 ## Requirements
 
@@ -42,19 +45,16 @@ An AI-powered agent that helps diagnose and explain YouTrack workflow behavior. 
 
 ## Usage
 
-Once running, enter your workflow-related questions when prompted:
-
-```
-Enter your problem (or type 'exit'): Why did issue ABC-123 automatically move to 'In Progress'?
-```
+Once running, enter your workflow-related questions.
 
 The agent will analyze your YouTrack workflows and provide an explanation with links to the relevant workflow rules.
+
+Agent works as a chatbot with history.
 
 Type `exit` to quit the application.
 
 ## Tech Stack
 
-- **Kotlin** - Primary language
 - **Koog** - AI agent framework
 - **Anthropic Claude** - LLM for analysis
 - **Ktor** - HTTP client for YouTrack API
