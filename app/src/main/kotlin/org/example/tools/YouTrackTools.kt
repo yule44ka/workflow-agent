@@ -13,6 +13,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.json.Json
 import org.example.model.AppDetails
 import org.example.model.Workflow
@@ -76,6 +79,21 @@ class YouTrackToolSet : ToolSet {
         usages.mapNotNull { it.workflow }
     }
 
+    // Internal suspend version to avoid blocking when composing other suspend tools
+    private suspend fun fetchProjectWorkflows(projectId: String): List<Workflow> {
+        val url = "$domain/api/admin/projects/$projectId/workflows?fields=workflow(id,name)"
+        val response = client.get(url) {
+            header("Authorization", "Bearer $token")
+        }
+        if (!response.status.isSuccess()) return emptyList()
+        val usages: List<WorkflowUsageResponse> = try {
+            response.body()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return usages.mapNotNull { it.workflow }
+    }
+
     @Tool
     @LLMDescription("Get all enabled rules for project by workflow.")
     suspend fun getEnabledRulesForWorkflow(
@@ -108,6 +126,24 @@ class YouTrackToolSet : ToolSet {
             }
         }
         return rules
+    }
+
+    @Tool
+    @LLMDescription("Get all enabled rules for a project across all workflows. Executes per-workflow requests in parallel for speed.")
+    suspend fun getEnabledRulesForProject(
+        @LLMDescription("Project ID, e.g. NEW")
+        projectId: String
+    ): List<WorkflowRule> = coroutineScope {
+        val workflows = fetchProjectWorkflows(projectId)
+        if (workflows.isEmpty()) return@coroutineScope emptyList()
+
+        val deferred = workflows.map { wf ->
+            async {
+                runCatching { getEnabledRulesForWorkflow(projectId, wf) }
+                    .getOrElse { emptyList() }
+            }
+        }
+        deferred.awaitAll().flatten()
     }
 }
 
